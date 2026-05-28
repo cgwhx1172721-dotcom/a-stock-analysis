@@ -32,6 +32,8 @@ export interface StockBasic {
   prevClose: number;
   high: number;
   low: number;
+  pe: number | null;
+  pb: number | null;
 }
 
 export interface KlinePoint {
@@ -54,7 +56,7 @@ export interface FundFlowDay {
 
 export async function fetchStockBasic(code: string): Promise<StockBasic | null> {
   const secid = getSecId(code);
-  const url = `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f57,f58,f43,f44,f45,f60,f169,f170,f116,f168,f10,f50,f127&ut=${EM_UT}&_=${Date.now()}`;
+  const url = `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f57,f58,f43,f44,f45,f60,f169,f170,f116,f168,f10,f50,f127,f9,f23&ut=${EM_UT}&_=${Date.now()}`;
   try {
     const res = await fetch(url, { headers: EM_HEADERS, cache: 'no-store' });
     const json = await res.json();
@@ -74,6 +76,8 @@ export async function fetchStockBasic(code: string): Promise<StockBasic | null> 
       prevClose: Number(d.f60 || 0) / 100,
       high: Number(d.f44 || 0) / 100,
       low: Number(d.f45 || 0) / 100,
+      pe: d.f9 && d.f9 !== '-' ? Number(d.f9) / 100 : null,
+      pb: d.f23 && d.f23 !== '-' ? Number(d.f23) / 100 : null,
     };
   } catch { return null; }
 }

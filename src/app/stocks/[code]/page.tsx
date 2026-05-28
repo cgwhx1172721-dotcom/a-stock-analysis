@@ -3,19 +3,53 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ColorType, createChart } from 'lightweight-charts';
 
-// ——— types ———
-interface Basic { code:string;name:string;price:number;changePercent:number;change:number;volumeRatio:number;turnoverRate:number;marketCap:number;industry:string;prevClose:number;high:number;low:number; }
-interface FundDay { date:string;mainNetInflow:number; }
+interface Basic { code:string;name:string;price:number;changePercent:number;change:number;volumeRatio:number;turnoverRate:number;marketCap:number;industry:string;prevClose:number;high:number;low:number;pe:number|null;pb:number|null; }
 interface FundAnalysis { signal:'good'|'neutral'|'bad';title:string;summary:string;dailyLines:string[];total3d:number; }
 interface VolumeAnalysis { signal:'good'|'neutral'|'bad';title:string;summary:string;details:string[]; }
 interface SectorResult { isHot:boolean;theme:string|null;industry:string;reason:string; }
 interface MomAdvice { text:string;emoji:string;colorClass:string; }
+interface LogicAnalysis { signal:'good'|'neutral'|'bad';title:string;summary:string;bullets:string[]; }
+interface FundamentalsAnalysis { signal:'good'|'neutral'|'bad';title:string;summary:string;details:string[]; }
+interface PositionAnalysis { signal:'good'|'neutral'|'bad';title:string;summary:string;positionPct:number;details:string[]; }
+interface RiskAnalysis { signal:'good'|'neutral'|'bad';title:string;summary:string;risks:string[]; }
 interface Technical { ma5:number|null;ma20:number|null;ma60:number|null;rsi:number|null;macd:{macd:number|null;signal:number|null};signals:string[]; }
 interface Kline { date:string;open:number;close:number;high:number;low:number;volume:number;changePercent:number; }
 
-// ——— helpers ———
 const fmtY = (n: number) => `¥${n.toFixed(2)}`;
 const fmtCap = (v: number) => v >= 1e12 ? `${(v/1e12).toFixed(1)}万亿` : v >= 1e8 ? `${(v/1e8).toFixed(0)}亿` : `${(v/1e6).toFixed(0)}百万`;
+
+function signalBorder(s: 'good'|'neutral'|'bad') {
+  return s==='good' ? 'border-emerald-600 bg-emerald-950/30' : s==='bad' ? 'border-rose-600 bg-rose-950/30' : 'border-amber-600 bg-amber-950/30';
+}
+
+function SignalCard({ label, data }: { label: string; data: { signal:'good'|'neutral'|'bad'; title:string; summary:string; } & Record<string,unknown> }) {
+  const lists = Object.entries(data).filter(([k]) => ['bullets','details','risks','dailyLines'].includes(k)).flatMap(([,v]) => v as string[]);
+  return (
+    <section className={`rounded-3xl border p-5 ${signalBorder(data.signal)}`}>
+      <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-base font-bold text-white">{data.title}</p>
+      <p className="text-sm text-slate-300 mt-2 leading-relaxed">{data.summary}</p>
+      {lists.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {lists.map((l, i) => <li key={i} className="text-xs text-slate-400 leading-relaxed">· {l}</li>)}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function PositionBar({ pct }: { pct: number }) {
+  return (
+    <div className="mt-3">
+      <div className="flex justify-between text-xs text-slate-500 mb-1"><span>近期低点</span><span>近期高点</span></div>
+      <div className="relative h-2 rounded-full bg-slate-700">
+        <div className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-emerald-500 to-rose-500" style={{ width: `${pct}%` }} />
+        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-4 w-1 rounded-full bg-white shadow" style={{ left: `${pct}%` }} />
+      </div>
+      <p className="text-center text-xs text-slate-400 mt-1">{pct}% 位置</p>
+    </div>
+  );
+}
 
 function rsiInfo(r: number) {
   if (r >= 80) return { text:'严重超买', desc:'建议减仓，等待回调', color:'text-rose-400', border:'border-rose-700', bg:'bg-rose-950/40' };
@@ -30,18 +64,14 @@ function macdInfo(m: number) {
   if (m > -3) return { text:'空头区间', desc:'偏空，谨慎持仓',     color:'text-orange-400', border:'border-orange-700', bg:'bg-orange-950/40' };
   return             { text:'弱势空头', desc:'下行压力大，注意止损',color:'text-rose-400', border:'border-rose-700', bg:'bg-rose-950/40' };
 }
-function signalBorder(s: 'good'|'neutral'|'bad') {
-  return s==='good' ? 'border-emerald-600 bg-emerald-950/30' : s==='bad' ? 'border-rose-600 bg-rose-950/30' : 'border-amber-600 bg-amber-950/30';
-}
 
-// ——— skeleton ———
 function Skeleton() {
   return (
     <div className="space-y-4 animate-pulse p-4">
       <div className="h-24 rounded-3xl bg-slate-800" />
-      <div className="grid grid-cols-4 gap-2">{[...Array(4)].map((_,i)=><div key={i} className="h-16 rounded-2xl bg-slate-800"/>)}</div>
+      <div className="grid grid-cols-4 gap-2">{[...Array(8)].map((_,i)=><div key={i} className="h-16 rounded-2xl bg-slate-800"/>)}</div>
       <div className="h-64 rounded-3xl bg-slate-800"/>
-      <div className="h-48 rounded-3xl bg-slate-800"/>
+      {[...Array(6)].map((_,i)=><div key={i} className="h-36 rounded-3xl bg-slate-800"/>)}
     </div>
   );
 }
@@ -55,6 +85,10 @@ export default function StockPage() {
   const [volume, setVolume] = useState<VolumeAnalysis|null>(null);
   const [sector, setSector] = useState<SectorResult|null>(null);
   const [momAdvice, setMomAdvice] = useState<MomAdvice|null>(null);
+  const [logic, setLogic] = useState<LogicAnalysis|null>(null);
+  const [fundamentals, setFundamentals] = useState<FundamentalsAnalysis|null>(null);
+  const [position, setPosition] = useState<PositionAnalysis|null>(null);
+  const [risk, setRisk] = useState<RiskAnalysis|null>(null);
   const [technical, setTechnical] = useState<Technical|null>(null);
   const [history, setHistory] = useState<Kline[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +109,10 @@ export default function StockPage() {
       setVolume(mainRes.volume);
       setSector(mainRes.sector);
       setMomAdvice(mainRes.momAdvice);
+      setLogic(mainRes.logic);
+      setFundamentals(mainRes.fundamentals);
+      setPosition(mainRes.position);
+      setRisk(mainRes.risk);
       setTechnical(techRes.data);
       setHistory(histRes.data || []);
     } catch { setError('网络错误，请检查连接后重试'); }
@@ -83,11 +121,10 @@ export default function StockPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // K 线图（A 股色：红涨绿跌）
   useEffect(() => {
     if (!chartRef.current || !history.length) return;
     const chart = createChart(chartRef.current, {
-      width: chartRef.current.clientWidth, height: 280,
+      width: chartRef.current.clientWidth, height: 260,
       layout: { background: { type: ColorType.Solid, color: '#07121f' }, textColor: '#94a3b8', fontSize: 11 },
       grid: { vertLines: { color: '#1d2e42' }, horzLines: { color: '#1d2e42' } },
       rightPriceScale: { borderColor: '#33415c' },
@@ -142,14 +179,14 @@ export default function StockPage() {
         <section className="rounded-3xl border border-slate-800 bg-[#0d1c2e] p-4">
           <div className="grid grid-cols-4 gap-2 text-center text-xs">
             {[
-              { label:'今日最高', value: fmtY(basic.high) },
-              { label:'今日最低', value: fmtY(basic.low) },
               { label:'涨停价', value: fmtY(limitUp), color:'text-rose-400' },
               { label:'跌停价', value: fmtY(limitDown), color:'text-emerald-400' },
+              { label:'今日最高', value: fmtY(basic.high) },
+              { label:'今日最低', value: fmtY(basic.low) },
               { label:'市值', value: fmtCap(basic.marketCap) },
               { label:'换手率', value: `${basic.turnoverRate.toFixed(2)}%` },
               { label:'量比', value: basic.volumeRatio.toFixed(2) },
-              { label:'昨收', value: fmtY(basic.prevClose) },
+              { label:'市盈率PE', value: basic.pe != null ? basic.pe.toFixed(1) : '--' },
             ].map(item => (
               <div key={item.label} className="rounded-2xl border border-slate-700 bg-[#07121f] p-2.5">
                 <p className="text-slate-500">{item.label}</p>
@@ -166,42 +203,34 @@ export default function StockPage() {
             <p className="text-xs text-slate-500">红涨绿跌 · 近 90 天</p>
           </div>
           {history.length ? (
-            <div ref={chartRef} className="rounded-2xl bg-[#07121f] overflow-hidden" style={{ height: 280 }} />
+            <div ref={chartRef} className="rounded-2xl bg-[#07121f] overflow-hidden" style={{ height: 260 }} />
           ) : (
             <div className="h-40 flex items-center justify-center text-slate-500 text-sm">K 线数据加载中…</div>
           )}
         </section>
 
-        {/* ─── A 股专属：主力资金 + 量能 ─── */}
-        {fund && (
-          <section className={`rounded-3xl border p-5 ${signalBorder(fund.signal)}`}>
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">主力资金</p>
-                <p className="text-base font-bold text-white">{fund.title}</p>
-              </div>
-            </div>
-            <p className="text-sm text-slate-300 mt-2 leading-relaxed">{fund.summary}</p>
-            {fund.dailyLines.length > 0 && (
-              <ul className="mt-3 space-y-1">
-                {fund.dailyLines.map((l, i) => <li key={i} className="text-xs text-slate-400 font-mono">· {l}</li>)}
-              </ul>
-            )}
+        {/* ─── 投资逻辑 ─── */}
+        {logic && <SignalCard label="投资逻辑" data={logic as any} />}
+
+        {/* ─── 基本面 ─── */}
+        {fundamentals && <SignalCard label="基本面分析" data={fundamentals as any} />}
+
+        {/* ─── 价格位置 ─── */}
+        {position && (
+          <section className={`rounded-3xl border p-5 ${signalBorder(position.signal)}`}>
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">价格位置</p>
+            <p className="text-base font-bold text-white">{position.title}</p>
+            <PositionBar pct={position.positionPct} />
+            <p className="text-sm text-slate-300 mt-3 leading-relaxed">{position.summary}</p>
+            <ul className="mt-2 space-y-1">
+              {position.details.map((d,i) => <li key={i} className="text-xs text-slate-400">· {d}</li>)}
+            </ul>
           </section>
         )}
 
-        {volume && (
-          <section className={`rounded-3xl border p-5 ${signalBorder(volume.signal)}`}>
-            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">量能分析</p>
-            <p className="text-base font-bold text-white">{volume.title}</p>
-            <p className="text-sm text-slate-300 mt-2 leading-relaxed">{volume.summary}</p>
-            {volume.details.length > 0 && (
-              <ul className="mt-2 space-y-1">
-                {volume.details.map((d, i) => <li key={i} className="text-xs text-slate-400">· {d}</li>)}
-              </ul>
-            )}
-          </section>
-        )}
+        {/* ─── 主力资金 + 量能 ─── */}
+        {fund && <SignalCard label="主力资金" data={fund as any} />}
+        {volume && <SignalCard label="量能分析" data={volume as any} />}
 
         {/* ─── 赛道热度 ─── */}
         {sector && (
@@ -212,25 +241,24 @@ export default function StockPage() {
           </section>
         )}
 
+        {/* ─── 风险分析 ─── */}
+        {risk && <SignalCard label="风险分析" data={risk as any} />}
+
         {/* ─── 技术指标 ─── */}
         {technical && (
           <section className="rounded-3xl border border-slate-800 bg-[#0d1c2e] p-5">
             <h3 className="text-base font-semibold text-white mb-4">技术指标</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-
-              {/* 均线 */}
               {technical.ma5 && technical.ma20 && technical.ma60 && (() => {
                 const p = basic.price;
-                const up = p > technical.ma5! && technical.ma5! > technical.ma20! && technical.ma20! > technical.ma60!;
-                const down = p < technical.ma5! && technical.ma5! < technical.ma20! && technical.ma20! < technical.ma60!;
-                const info = up ? { text:'多头排列', desc:'三线向上，趋势健康', color:'text-emerald-400', border:'border-emerald-700', bg:'bg-emerald-950/40' }
-                           : down ? { text:'空头排列', desc:'三线向下，注意止损', color:'text-rose-400', border:'border-rose-700', bg:'bg-rose-950/40' }
+                const up2 = p > technical.ma5! && technical.ma5! > technical.ma20! && technical.ma20! > technical.ma60!;
+                const dn = p < technical.ma5! && technical.ma5! < technical.ma20! && technical.ma20! < technical.ma60!;
+                const info = up2 ? { text:'多头排列', desc:'三线向上，趋势健康', color:'text-emerald-400', border:'border-emerald-700', bg:'bg-emerald-950/40' }
+                           : dn ? { text:'空头排列', desc:'三线向下，注意止损', color:'text-rose-400', border:'border-rose-700', bg:'bg-rose-950/40' }
                            : { text:'均线混乱', desc:'方向不明，建议观望', color:'text-slate-400', border:'border-slate-700', bg:'bg-slate-800' };
                 return (
                   <div className={`sm:col-span-2 rounded-2xl border ${info.border} ${info.bg} p-4`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500">均线系统</span>
-                    </div>
+                    <span className="text-xs text-slate-500">均线系统</span>
                     <p className={`mt-1 text-base font-bold ${info.color}`}>{info.text}</p>
                     <p className="text-xs text-slate-400 mt-0.5">{info.desc}</p>
                     <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-400">
@@ -241,32 +269,26 @@ export default function StockPage() {
                   </div>
                 );
               })()}
-
-              {/* RSI */}
               {technical.rsi != null && (() => {
                 const r = rsiInfo(technical.rsi!);
                 return (
                   <div className={`rounded-2xl border ${r.border} ${r.bg} p-4`}>
-                    <div className="flex items-center justify-between"><span className="text-xs text-slate-500">RSI 强弱指数</span><span className="text-xs text-slate-400">{technical.rsi!.toFixed(1)}</span></div>
+                    <div className="flex justify-between"><span className="text-xs text-slate-500">RSI 强弱指数</span><span className="text-xs text-slate-400">{technical.rsi!.toFixed(1)}</span></div>
                     <p className={`mt-2 text-base font-bold ${r.color}`}>{r.text}</p>
                     <p className="text-xs text-slate-400 mt-0.5">{r.desc}</p>
                   </div>
                 );
               })()}
-
-              {/* MACD */}
               {technical.macd.macd != null && (() => {
                 const m = macdInfo(technical.macd.macd!);
                 return (
                   <div className={`rounded-2xl border ${m.border} ${m.bg} p-4`}>
-                    <div className="flex items-center justify-between"><span className="text-xs text-slate-500">MACD 动能</span><span className="text-xs text-slate-400">{technical.macd.macd!.toFixed(3)}</span></div>
+                    <div className="flex justify-between"><span className="text-xs text-slate-500">MACD 动能</span><span className="text-xs text-slate-400">{technical.macd.macd!.toFixed(3)}</span></div>
                     <p className={`mt-2 text-base font-bold ${m.color}`}>{m.text}</p>
                     <p className="text-xs text-slate-400 mt-0.5">{m.desc}</p>
                   </div>
                 );
               })()}
-
-              {/* 综合信号 */}
               {technical.signals.length > 0 && (
                 <div className="sm:col-span-2 rounded-2xl border border-slate-700 bg-[#07121f] p-4">
                   <p className="text-xs text-slate-500 mb-2">综合技术信号</p>
@@ -283,7 +305,7 @@ export default function StockPage() {
           </section>
         )}
 
-        {/* ─── 妈妈综合建议 ─── */}
+        {/* ─── 综合建议 ─── */}
         {momAdvice && (
           <section className="rounded-3xl border border-slate-700 bg-[#0d1c2e] p-5">
             <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">综合建议</p>
