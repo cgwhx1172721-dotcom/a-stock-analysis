@@ -112,6 +112,10 @@ export default function StockPage() {
   const [error, setError] = useState('');
   const chartRef = useRef<HTMLDivElement|null>(null);
 
+  // ── AI Analysis ──
+  const [aiText, setAiText] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+
   // ── Watchlist ──
   const [inWatchlist, setInWatchlist] = useState(false);
 
@@ -191,6 +195,17 @@ export default function StockPage() {
         const next = [entry, ...prev.filter(x => x.code !== entry.code)].slice(0, 6);
         localStorage.setItem('recent_searches', JSON.stringify(next));
       } catch { /* ignore */ }
+
+      // Fetch AI analysis async (non-blocking)
+      setAiLoading(true);
+      try {
+        const hSaved = localStorage.getItem(`holdings_${mainRes.basic.code}`);
+        const hData = hSaved ? JSON.parse(hSaved) : null;
+        const aiParams = hData ? `?shares=${hData.shares}&avgCost=${hData.avgCost}` : '';
+        const aiRes = await fetch(`/api/stocks/${mainRes.basic.code}/ai${aiParams}`).then(r => r.json());
+        if (aiRes.text) setAiText(aiRes.text);
+      } catch { /* AI failure is non-fatal */ }
+      finally { setAiLoading(false); }
     } catch { setError('网络错误，请检查连接后重试'); }
     finally { setLoading(false); }
   }, [code]);
@@ -593,6 +608,31 @@ export default function StockPage() {
             </section>
           );
         })()}
+
+        {/* ─── AI 中文解释 ─── */}
+        <section className="rounded-2xl border border-[#E5E5EA] bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">🤖</span>
+            <h3 className="text-base font-semibold text-[#1A1A1E]">AI 中文解读</h3>
+            {aiLoading && (
+              <span className="ml-auto text-xs text-[#9A9A9E] animate-pulse">DeepSeek 分析中…</span>
+            )}
+          </div>
+          {aiLoading && !aiText && (
+            <div className="space-y-2 animate-pulse">
+              <div className="h-3.5 rounded bg-[#E5E5EA] w-full" />
+              <div className="h-3.5 rounded bg-[#E5E5EA] w-5/6" />
+              <div className="h-3.5 rounded bg-[#E5E5EA] w-4/6" />
+              <div className="h-3.5 rounded bg-[#E5E5EA] w-full mt-2" />
+              <div className="h-3.5 rounded bg-[#E5E5EA] w-3/4" />
+            </div>
+          )}
+          {aiText ? (
+            <div className="text-sm text-[#4A4A4E] leading-7 whitespace-pre-line">{aiText}</div>
+          ) : !aiLoading ? (
+            <p className="text-sm text-[#C0C0C5]">AI 解读加载失败，请刷新重试</p>
+          ) : null}
+        </section>
 
         <p className="text-center text-xs text-[#C0C0C5] pb-4">以上分析仅供参考，不构成投资建议。股市有风险，投资需谨慎。</p>
       </div>
