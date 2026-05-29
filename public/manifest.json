@@ -4,8 +4,8 @@
   "description": "主力资金、量能状态、赛道热度一键分析",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#050d1a",
-  "theme_color": "#050d1a",
+  "background_color": "#F2F2F7",
+  "theme_color": "#F2F2F7",
   "orientation": "portrait",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },

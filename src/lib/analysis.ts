@@ -108,14 +108,14 @@ export function getMomAdvice(fund: Signal, volume: Signal, hotSector: boolean): 
     (hotSector ? 2 : 0);
 
   if (score >= 5) {
-    return { emoji: '✅', colorClass: 'text-emerald-400',
+    return { emoji: '✅', colorClass: 'text-orange-600',
       text: '三个条件基本都满足，可以重点关注。买入前记得看大盘整体走势，不要在大盘下跌时逆势操作。' };
   }
   if (score >= 3) {
-    return { emoji: '🟡', colorClass: 'text-amber-400',
+    return { emoji: '🟡', colorClass: 'text-amber-600',
       text: '部分条件满足，可以加入自选继续观察。等主力信号更明确、量能放大时再考虑买入，不用着急。' };
   }
-  return { emoji: '⏸️', colorClass: 'text-rose-400',
+  return { emoji: '⏸️', colorClass: 'text-rose-500',
     text: '当前条件不太理想，主力未明显介入或量能不足。建议暂时观望，把钱留着等更好的机会。' };
 }
 
@@ -271,6 +271,48 @@ export function analyzePosition(
   }
 
   return { signal, title, summary, positionPct, details };
+}
+
+// ─── 止盈止损 ─────────────────────────────────────
+export interface StopPointsAnalysis {
+  stopLoss: number;
+  stopLossPct: number;
+  tp1: number;
+  tp2: number;
+  tp3: number;
+  riskReward: number;
+  details: string[];
+}
+
+export function analyzeStopPoints(
+  price: number,
+  ma20: number | null,
+): StopPointsAnalysis {
+  const stopByPct = Math.round(price * 0.95 * 100) / 100;
+  const stopRaw = ma20 ? Math.max(ma20, stopByPct) : stopByPct;
+  const stopLoss = Math.round(stopRaw * 100) / 100;
+  const stopLossPct = parseFloat(((stopLoss - price) / price * 100).toFixed(2));
+
+  const tp1 = Math.round(price * 1.05 * 100) / 100;
+  const tp2 = Math.round(price * 1.10 * 100) / 100;
+  const tp3 = Math.round(price * 1.18 * 100) / 100;
+
+  const risk = price - stopLoss;
+  const riskReward = risk > 0 ? Math.round(((tp1 - price) / risk) * 100) / 100 : 0;
+
+  const details: string[] = [];
+  if (ma20 && ma20 > stopByPct) {
+    details.push(`🛡️ MA20（${ma20.toFixed(2)}）高于 -5% 止损位，以 MA20 为止损参考，空间更紧`);
+  } else {
+    details.push(`🛡️ 止损设于当前价 -5%，MA20 低于此位或暂无数据`);
+  }
+  details.push('📈 三档止盈：+5% 轻仓减半 / +10% 再减 / +18% 清仓');
+  const rrText = riskReward >= 1.5 ? `✅ 风险回报比 1:${riskReward.toFixed(2)}，性价比良好，可考虑建仓`
+    : riskReward >= 1.0 ? `🟡 风险回报比 1:${riskReward.toFixed(2)}，性价比一般，结合其他信号判断`
+    : `⚠️ 风险回报比 1:${riskReward.toFixed(2)}，性价比偏低，建议等待更好入场点`;
+  details.push(rrText);
+
+  return { stopLoss, stopLossPct, tp1, tp2, tp3, riskReward, details };
 }
 
 // ─── 新增：风险面 ─────────────────────────────────

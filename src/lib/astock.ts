@@ -84,7 +84,7 @@ export async function fetchStockBasic(code: string): Promise<StockBasic | null> 
 
 export async function fetchKlineHistory(code: string, limit = 90): Promise<KlinePoint[]> {
   const secid = getSecId(code);
-  const url = `https://push2.eastmoney.com/api/qt/stock/kline/get?secid=${secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20261231&lmt=${limit}&ut=${EM_UT}&_=${Date.now()}`;
+  const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20991231&lmt=${limit}&ut=${EM_UT}&_=${Date.now()}`;
   try {
     const res = await fetch(url, { headers: EM_HEADERS, cache: 'no-store' });
     const json = await res.json();

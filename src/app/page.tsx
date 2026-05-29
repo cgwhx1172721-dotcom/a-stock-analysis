@@ -1,29 +1,37 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-const HOTLIST = [
-  { code: '600519', name: '贵州茅台' },
-  { code: '000858', name: '五粮液' },
-  { code: '300750', name: '宁德时代' },
-  { code: '688981', name: '中芯国际' },
-  { code: '002594', name: '比亚迪' },
-];
+interface RecentItem { code: string; name: string; }
 
 export default function HomePage() {
   const [code, setCode] = useState('');
+  const [recents, setRecents] = useState<RecentItem[]>([]);
   const router = useRouter();
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('recent_searches') || '[]');
+      setRecents(saved);
+    } catch { /* ignore */ }
+  }, []);
+
   const go = (c: string) => { const n = c.replace(/\D/g, ''); if (n.length >= 5) router.push(`/stocks/${n}`); };
 
   return (
-    <main className="min-h-screen bg-[#050d1a] flex flex-col items-center justify-center px-5 py-12 safe-bottom">
+    <main className="min-h-screen bg-[#F2F2F7] flex flex-col items-center justify-center px-5 py-12 pb-24">
       <div className="w-full max-w-sm space-y-8">
+
+        {/* 标题 */}
         <div className="text-center space-y-2">
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-500">A 股量化分析助手</p>
-          <h1 className="text-4xl font-semibold text-white">选股分析</h1>
-          <p className="text-slate-400 text-sm">主力资金 · 量能状态 · 赛道热度</p>
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl shadow-lg shadow-red-200 mb-2 overflow-hidden">
+            <img src="/icon.svg" alt="A股分析助手" className="w-full h-full" />
+          </div>
+          <h1 className="text-3xl font-bold text-[#1A1A1E]">A 股分析助手</h1>
+          <p className="text-[#9A9A9E] text-sm">主力资金 · 量能状态 · 赛道热度</p>
         </div>
 
+        {/* 搜索框 */}
         <div className="space-y-3">
           <input
             type="text" inputMode="numeric"
@@ -31,25 +39,32 @@ export default function HomePage() {
             onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
             onKeyDown={e => e.key === 'Enter' && go(code)}
             placeholder="输入 6 位股票代码"
-            className="w-full rounded-2xl border border-slate-700 bg-[#0d1c2e] px-5 py-4 text-xl text-white placeholder:text-slate-600 focus:outline-none focus:border-teal-500 text-center tracking-widest"
+            className="w-full rounded-2xl border border-[#E5E5EA] bg-white px-5 py-4 text-xl text-[#1A1A1E] placeholder:text-[#C0C0C5] focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 text-center tracking-widest shadow-sm transition-all"
           />
           <button onClick={() => go(code)} disabled={code.length < 5}
-            className="w-full rounded-2xl bg-teal-500 py-4 text-lg font-semibold text-slate-900 hover:bg-teal-400 disabled:opacity-40 transition-colors">
+            className="w-full rounded-2xl bg-orange-500 py-4 text-lg font-semibold text-white hover:bg-orange-400 active:bg-orange-600 disabled:opacity-30 shadow-md shadow-orange-200 transition-all">
             开始分析
           </button>
         </div>
 
+        {/* 最近搜索 */}
         <div>
-          <p className="text-xs text-slate-600 mb-3 text-center uppercase tracking-wider">热门股票</p>
-          <div className="space-y-2">
-            {HOTLIST.map(s => (
-              <button key={s.code} onClick={() => go(s.code)}
-                className="w-full flex items-center justify-between rounded-2xl border border-slate-800 bg-[#0d1c2e] px-4 py-3 hover:border-slate-600 transition-colors">
-                <span className="text-white font-medium">{s.name}</span>
-                <span className="text-slate-500 text-sm">{s.code} →</span>
-              </button>
-            ))}
-          </div>
+          <p className="text-xs text-[#C0C0C5] mb-3 text-center uppercase tracking-wider">最近搜索</p>
+          {recents.length > 0 ? (
+            <div className="space-y-2">
+              {recents.map(s => (
+                <button key={s.code} onClick={() => go(s.code)}
+                  className="w-full flex items-center justify-between rounded-2xl border border-[#E5E5EA] bg-white px-4 py-3.5 hover:border-orange-300 hover:bg-orange-50 active:bg-orange-100 shadow-sm transition-all">
+                  <span className="text-[#1A1A1E] font-medium">{s.name}</span>
+                  <span className="text-[#9A9A9E] text-sm">{s.code} →</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 border border-dashed border-[#E5E5EA] rounded-2xl bg-white">
+              <p className="text-sm text-[#C0C0C5]">搜索过的股票会显示在这里</p>
+            </div>
+          )}
         </div>
       </div>
     </main>

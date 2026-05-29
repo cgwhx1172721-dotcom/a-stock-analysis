@@ -3,7 +3,7 @@ import { fetchStockBasic, fetchFundFlowDays, fetchKlineHistory, normalizeCode } 
 import { analyzeSector } from '@/lib/sectors';
 import {
   analyzeFundFlow, analyzeVolume, getMomAdvice,
-  analyzeLogic, analyzeFundamentals, analyzePosition, analyzeRisk,
+  analyzeLogic, analyzeFundamentals, analyzePosition, analyzeRisk, analyzeStopPoints,
 } from '@/lib/analysis';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
@@ -44,6 +44,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
   const fundamentals = analyzeFundamentals(basic.pe, basic.pb, basic.marketCap);
   const position = analyzePosition(basic.price, null, ma20, ma60, history);
   const risk = analyzeRisk(basic.price, basic.prevClose, basic.changePercent, rsi, fund.signal, ma20, ma60);
+  const stopPoints = analyzeStopPoints(basic.price, ma20);
 
-  return NextResponse.json({ basic, fund, volume, sector, momAdvice, logic, fundamentals, position, risk });
+  return NextResponse.json({ basic, fund, volume, sector, momAdvice, logic, fundamentals, position, risk, stopPoints });
 }
